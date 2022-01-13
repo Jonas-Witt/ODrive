@@ -151,8 +151,8 @@ void CANSimple::do_command(Axis& axis, const can_Message_t& msg) {
         case MSG_SET_VEL_GAINS:
             set_vel_gains_callback(axis, msg);
             break;
-        case MSG_GET_IBUS_CURRENT:
-            get_ibus_current_callback(axis);
+        case MSG_GET_POWER:
+            get_power_callback(axis);
             break;
         case MSG_GET_TEMPERATURES:
             get_temperatures_callback(axis);
@@ -358,15 +358,16 @@ bool CANSimple::get_vbus_voltage_callback(const Axis& axis) {
     return canbus_->send_message(txmsg);
 }
 
-bool CANSimple::get_ibus_current_callback(const Axis& axis) {
+bool CANSimple::get_power_callback(const Axis& axis) {
     can_Message_t txmsg;
 
     txmsg.id = axis.config_.can.node_id << NUM_CMD_ID_BITS;
-    txmsg.id += MSG_GET_IBUS_CURRENT;
+    txmsg.id += MSG_GET_POWER;
     txmsg.isExt = axis.config_.can.is_extended;
     txmsg.len = 8;
 
-    can_setSignal<float>(txmsg, axis.motor_.I_bus_, 0, 32, true);
+    can_setSignal<float>(txmsg, vbus_voltage, 0, 32, true);
+    can_setSignal<float>(txmsg, axis.motor_.I_bus_, 32, 32, true);
 
     return canbus_->send_message(txmsg);
 }

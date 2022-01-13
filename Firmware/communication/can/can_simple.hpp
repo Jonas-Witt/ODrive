@@ -35,7 +35,7 @@ class CANSimple {
         MSG_SET_LINEAR_COUNT,
         MSG_SET_POS_GAIN,
         MSG_SET_VEL_GAINS,
-        MSG_GET_IBUS_CURRENT,
+        MSG_GET_POWER,
         MSG_GET_TEMPERATURES,
         MSG_SET_WATCHDOG,
         MSG_CO_HEARTBEAT_CMD = 0x700,  // CANOpen NMT Heartbeat  SEND
@@ -65,7 +65,7 @@ class CANSimple {
     bool get_iq_callback(const Axis& axis);
     bool get_sensorless_estimates_callback(const Axis& axis);
     bool get_vbus_voltage_callback(const Axis& axis);
-    bool get_ibus_current_callback(const Axis& axis);
+    bool get_power_callback(const Axis& axis);
     bool get_temperatures_callback(const Axis& axis);
 
     // Set functions
