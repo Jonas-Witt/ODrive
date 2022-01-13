@@ -151,6 +151,9 @@ void CANSimple::do_command(Axis& axis, const can_Message_t& msg) {
         case MSG_SET_VEL_GAINS:
             set_vel_gains_callback(axis, msg);
             break;
+        case MSG_SET_WATCHDOG:
+            set_watchdog_callback(axis, msg);
+            break;
         default:
             break;
     }
@@ -308,6 +311,11 @@ void CANSimple::set_vel_gains_callback(Axis& axis, const can_Message_t& msg) {
     axis.controller_.config_.vel_integrator_gain = can_getSignal<float>(msg, 32, 32, true);
 }
 
+void CANSimple::set_watchdog_callback(Axis& axis, const can_Message_t& msg) {
+    axis.config_.watchdog_timeout = can_getSignal<float>(msg, 0, 32, true);
+    axis.config_.enable_watchdog = axis.config_.watchdog_timeout > 0.0f;
+}
+
 bool CANSimple::get_iq_callback(const Axis& axis) {
     can_Message_t txmsg;
     txmsg.id = axis.config_.can.node_id << NUM_CMD_ID_BITS;
@@ -340,6 +348,32 @@ bool CANSimple::get_vbus_voltage_callback(const Axis& axis) {
     static_assert(sizeof(vbus_voltage) == sizeof(floatBytes));
     can_setSignal<float>(txmsg, vbus_voltage, 0, 32, true);
 
+    return canbus_->send_message(txmsg);
+}
+
+bool CANSimple::get_ibus_current_callback(const Axis& axis) {
+    can_Message_t txmsg;
+
+    txmsg.id = axis.config_.can.node_id << NUM_CMD_ID_BITS;
+    txmsg.id += MSG_GET_IBUS_VOLTAGE;
+    txmsg.isExt = axis.config_.can.is_extended;
+    txmsg.len = 8;
+
+    can_setSignal<float>(txmsg, axis.motor_.I_bus_, 0, 32, true);
+
+    return canbus_->send_message(txmsg);
+}
+
+bool CANSimple::get_temperatures_callback(const Axis& axis) {
+    can_Message_t txmsg;
+
+    txmsg.id = axis.config_.can.node_id << NUM_CMD_ID_BITS;
+    txmsg.id += MSG_GET_TEMPERATURES_VOLTAGE;
+    txmsg.isExt = axis.config_.can.is_extended;
+    txmsg.len = 8;
+
+    can_setSignal<float>(txmsg, axis.motor_.fet_thermistor_.temperature_, 0, 32, true);
+    can_setSignal<float>(txmsg, axis.motor_.motor_thermistor_.temperature_, 32, 32, true);
     return canbus_->send_message(txmsg);
 }
 
