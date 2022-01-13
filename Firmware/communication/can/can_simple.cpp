@@ -319,6 +319,7 @@ void CANSimple::set_vel_gains_callback(Axis& axis, const can_Message_t& msg) {
 
 void CANSimple::set_watchdog_callback(Axis& axis, const can_Message_t& msg) {
     axis.config_.watchdog_timeout = can_getSignal<float>(msg, 0, 32, true);
+    axis.watchdog_feed();
     axis.config_.enable_watchdog = axis.config_.watchdog_timeout > 0.0f;
 }
 
