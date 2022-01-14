@@ -1076,6 +1076,12 @@ interfaces:
           ABS_SPI_COM_FAIL:
           ABS_SPI_NOT_READY:
           HALL_NOT_CALIBRATED_YET:
+          HYBRID_INCREMENTAL_HALL_VELOCITY_DISAGREEMENT:
+            bit: 14
+            doc: |
+              Error gets thrown when the encoder mode is HYBRID_INCREMENTAL_HALL and the disagreement
+              between the encoder vel_estimate and hall vel_estimate exceeds config.max_vel_divergence.
+              
       is_ready: readonly bool
       index_found: readonly bool
       shadow_count: 
@@ -1141,6 +1147,20 @@ interfaces:
           pre_calibrated: {type: bool, c_setter: set_pre_calibrated}
           enable_phase_interpolation: bool
           bandwidth: {type: float32, c_setter: set_bandwidth}
+          hybrid_incremental_hall_vel_bandwidth: 
+            type: float32
+            doc: Influences filter gain for estimating velocity from hall sensors in hybrid mode.
+          hybrid_incremental_hall_vel_divergence_bandwidth:
+            type: float32
+            doc: |
+              Influences filter gain for estimating velocity divergence between hall sensors and encoders.
+              Want this to be slower than vel estaimation filters.
+          hybrid_incremental_hall_max_vel_divergence:
+            type: float32
+            doc: Max error between encoder and hall vel estimates before an error is thrown (in turns per second)
+          hybrid_incremental_hall_max_phase_error:
+            type: float32
+            doc: Phase error beyond the normal [-M_PI/6, M_PI/6] range that requires correction
           calib_range: float32
           calib_scan_distance: float32
           calib_scan_omega: float32
@@ -1381,6 +1401,10 @@ valuetypes:
       INCREMENTAL:
       HALL:
       SINCOS:
+      HYBRID_INCREMENTAL_HALL:
+        doc: |
+          Mainly uses incremental encoder, but automatically syncs phase via hall sensors
+          and compensates encoder slip.
       SPI_ABS_CUI:
         value: 0x100
         doc: compatible with CUI AMT23xx

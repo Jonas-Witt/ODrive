@@ -24,6 +24,8 @@ bool Encoder::apply_config(ODriveIntf::MotorIntf::MotorType motor_type) {
     if (config_.pre_calibrated) {
         if (config_.mode == Encoder::MODE_HALL && config_.hall_polarity_calibrated)
             is_ready_ = true;
+        if (config_.mode == Encoder::MODE_HYBRID_INCREMENTAL_HALL && config_.hall_polarity_calibrated)
+            is_ready_ = true;
         if (config_.mode == Encoder::MODE_SINCOS)
             is_ready_ = true;
         if (motor_type == Motor::MOTOR_TYPE_ACIM)
@@ -650,6 +652,8 @@ int32_t Encoder::hall_model(float internal_pos) {
 bool Encoder::update() {
     // update internal encoder state.
     int32_t delta_enc = 0;
+    int32_t hybrid_delta_hall = 0;
+    int32_t hybrid_hall_count = 0;
     int32_t pos_abs_latched = pos_abs_; //LATCH
 
     switch (mode_) {
@@ -659,6 +663,21 @@ bool Encoder::update() {
             int16_t delta_enc_16 = (int16_t)tim_cnt_sample_ - (int16_t)shadow_count_;
             delta_enc = (int32_t)delta_enc_16; //sign extend
         } break;
+
+        case MODE_HYBRID_INCREMENTAL_HALL: {
+            int16_t delta_enc_16 = (int16_t)tim_cnt_sample_ - (int16_t)shadow_count_;
+            delta_enc = (int32_t)delta_enc_16; //sign extend
+            decode_hall_samples();
+            if (decode_hall((hall_state_ ^ config_.hall_polarity), &hybrid_hall_count)) {
+                hybrid_delta_hall = hybrid_hall_count - hybrid_hall_count_in_cpr_;
+                hybrid_delta_hall = mod(hybrid_delta_hall, 6);
+                if (hybrid_delta_hall > 3)
+                    hybrid_delta_hall -= 6;
+            } else if (!config_.ignore_illegal_hall_state) {
+                set_error(ERROR_ILLEGAL_HALL_STATE);
+                return false;
+            }
+        } break;        
 
         case MODE_HALL: {
             decode_hall_samples();
@@ -835,6 +854,85 @@ bool Encoder::update() {
     if (is_ready_) {
         phase_ = wrap_pm_pi(ph) * config_.direction;
         phase_vel_ = (2*M_PI) * *vel_estimate_.present() * axis_->motor_.config_.pole_pairs * config_.direction;
+    }
+
+    if (config_.mode == MODE_HYBRID_INCREMENTAL_HALL) {
+        // CPR is the number of clicks per revolution
+        // the hall_count gives the position within an electric cycle, the hall_count_in_cpr is the motor position within
+        // one complete revolution.
+        // There are (axis_->motor_.config_.pole_pairs) electric cycles per revolution and 6 hall tickes per electric cycle
+        const int32_t hall_cpr = axis_->motor_.config_.pole_pairs * 6;
+        hybrid_hall_count_in_cpr_ += hybrid_delta_hall;
+        hybrid_hall_count_in_cpr_ = mod(hybrid_hall_count_in_cpr_, hall_cpr);
+
+        // run pll for hall velocity estimate
+        // I.e. run a filter to track motor velocity (in units of encoder ticks) over time using just the hall sensors.
+        // Note: This loop is run very quickly and most of the time the delta_hall_counts is 0 with an occasional 1 when the
+        // motor passes over a hall sensor transition edge. This filter builds up (comparitively) slowly and effectively
+        // averages out the sparse hall sensor ticks into an accurate velocity measurement (the encoder-based filter above
+        // does the exact same thing).
+        //
+        hybrid_hall_pos_cpr_counts_ += current_meas_period * hybrid_hall_vel_estimate_counts_;
+        float delta_hall_cpr_counts = static_cast<float>(hybrid_hall_count_in_cpr_) - hybrid_hall_pos_cpr_counts_;
+        //delta_hall_cpr_counts = wrap_pm(delta_hall_cpr_counts, 0.5f * static_cast<float>(hall_cpr));
+        delta_hall_cpr_counts = wrap_pm(delta_hall_cpr_counts, static_cast<float>(hall_cpr));
+        // pll feedback
+        const float hall_pll_kp = 2.0f * config_.hybrid_incremental_hall_vel_bandwidth;
+        const float hall_pll_ki = 0.25f * hall_pll_kp * hall_pll_kp;
+        hybrid_hall_pos_cpr_counts_ += current_meas_period * hall_pll_kp * delta_hall_cpr_counts;
+        hybrid_hall_pos_cpr_counts_ = fmodf_pos(hybrid_hall_pos_cpr_counts_, static_cast<float>(hall_cpr));
+        hybrid_hall_vel_estimate_counts_ += current_meas_period * hall_pll_ki * delta_hall_cpr_counts;
+        if (fabsf(hybrid_hall_vel_estimate_counts_) < 0.5f * current_meas_period * hall_pll_ki) {
+            hybrid_hall_vel_estimate_counts_ = 0.0f; //align delta-sigma on zero to prevent jitter
+        }
+        hybrid_hall_vel_estimate_ = hybrid_hall_vel_estimate_counts_ / static_cast<float>(hall_cpr);
+        //hybrid_hall_pos_estimate_ = hybrid_hall_pos_estimate_counts_ / static_cast<float>(hall_cpr);
+
+        // Hall velocity divergence estimate
+        // Note: this filter estimates the error between the hall-sensor-based and the encoder-based velocity estimates over
+        // time. To function properly this filter should have a lower gain (be slower to converge) than the velocity
+        // estimates themselves.
+        const float current_vel_difference = hybrid_hall_vel_estimate_ - *vel_estimate_.present();
+        const float vel_divergence_k = config_.hybrid_incremental_hall_vel_divergence_bandwidth * config_.hybrid_incremental_hall_vel_divergence_bandwidth;
+        hybrid_hall_vel_divergence_ += current_meas_period * vel_divergence_k * (current_vel_difference - hybrid_hall_vel_divergence_);
+        if (std::abs(hybrid_hall_vel_divergence_) > config_.hybrid_incremental_hall_max_vel_divergence &&
+            axis_->current_state_ == Axis::AXIS_STATE_CLOSED_LOOP_CONTROL) {
+            // Only check in closed-loop-control because calibration loops have hard stops with bounces that can cause large
+            // spikes in the hall_vel_divergence and cause false positives
+            set_error(ERROR_HYBRID_INCREMENTAL_HALL_VELOCITY_DISAGREEMENT);
+            return false;
+        }
+
+        hybrid_hall_phase_ = wrap_pm_pi((static_cast<float>(hybrid_hall_count) + 0.5f) * 2.0f * M_PI / 6.0f);
+
+        // ***Correct encoder if phase is out of bounds***
+        // In normal operation the phase is between (hall_phase_ - M_PI / 6.0, hall_phase_ + M_PI / 6.0)
+        // If it is out of this range we want to push it back into the range.
+        // As the wheel rotates we keep correcting until the hall transition edge where the actual phase should be
+        // (M_PI / 6.0) away from the previous hall_phase. This last correction will put the encoder count within our
+        // error bounds of the true phase.
+        hybrid_phase_error_ = hybrid_hall_phase_ - *phase_.present();
+        if (std::abs(hybrid_hall_phase_ - (*phase_.present() - 2*M_PI)) < std::abs(hybrid_phase_error_)) {
+            hybrid_phase_error_ = hybrid_hall_phase_ - (*phase_.present() - 2*M_PI);
+        } else if (std::abs(hybrid_hall_phase_ - (*phase_.present() + 2*M_PI)) < std::abs(hybrid_phase_error_)) {
+            hybrid_phase_error_ = hybrid_hall_phase_ - (*phase_.present() + 2*M_PI);
+        }
+
+
+        hybrid_phase_correction_ = 0.0f;
+        hybrid_encoder_count_correction_ = 0;
+        if (std::abs(hybrid_phase_error_) > M_PI / 6.0f + config_.hybrid_incremental_hall_max_phase_error) {
+            hybrid_phase_correction_ = hybrid_phase_error_ - std::copysign(M_PI / 6.0f, hybrid_phase_error_);
+
+            // Correct encoder count
+            hybrid_encoder_count_correction_ = static_cast<int32_t>(hybrid_phase_correction_ / elec_rad_per_enc);
+            shadow_count_ += hybrid_encoder_count_correction_;
+            pos_estimate_ = static_cast<float>(shadow_count_) / config_.cpr;
+            count_in_cpr_ += hybrid_encoder_count_correction_;
+            count_in_cpr_ = mod(count_in_cpr_, config_.cpr);
+            pos_cpr_counts_ = count_in_cpr_;
+            set_linear_count(shadow_count_);
+        }
     }
 
     return true;
