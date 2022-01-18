@@ -477,6 +477,7 @@ static bool decode_hall(uint8_t hall_state, int32_t* hall_cnt) {
 
 void Encoder::sample_now() {
     switch (mode_) {
+        case MODE_HYBRID_INCREMENTAL_HALL:
         case MODE_INCREMENTAL: {
             tim_cnt_sample_ = (int16_t)timer_->Instance->CNT;
         } break;
