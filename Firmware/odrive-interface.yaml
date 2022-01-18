@@ -1131,6 +1131,12 @@ interfaces:
         type: int32
         doc: The last (valid) position from an absolute encoder, if used.
       spi_error_rate: readonly float32
+      hybrid_hall_vel_estimate:
+        type: float32
+      hybrid_hall_pos_cpr_counts:
+        type: float32
+      hybrid_hall_vel_divergence:
+         type: float32
       config:
         c_is_class: False
         attributes:
