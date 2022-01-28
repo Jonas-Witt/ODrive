@@ -133,8 +133,8 @@ void Encoder::check_pre_calibrated() {
     if (axis_->motor_.config_.motor_type != Motor::MOTOR_TYPE_ACIM) {
         if (!is_ready_)
             config_.pre_calibrated = false;
-        if (mode_ == MODE_INCREMENTAL && !index_found_)
-            config_.pre_calibrated = false;
+    //    if (mode_ == MODE_INCREMENTAL && !index_found_)
+    //        config_.pre_calibrated = false;
     }
 }
 
