@@ -55,6 +55,7 @@ enum AxisState {
     AXIS_STATE_HOMING                        = 11,
     AXIS_STATE_ENCODER_HALL_POLARITY_CALIBRATION = 12,
     AXIS_STATE_ENCODER_HALL_PHASE_CALIBRATION = 13,
+    AXIS_STATE_BRAKE                         = 14,
 };
 
 // ODrive.Encoder.Mode
@@ -62,6 +63,7 @@ enum EncoderMode {
     ENCODER_MODE_INCREMENTAL                 = 0,
     ENCODER_MODE_HALL                        = 1,
     ENCODER_MODE_SINCOS                      = 2,
+    ENCODER_MODE_HYBRID_INCREMENTAL_HALL     = 3,
     ENCODER_MODE_SPI_ABS_CUI                 = 256,
     ENCODER_MODE_SPI_ABS_AMS                 = 257,
     ENCODER_MODE_SPI_ABS_AEAT                = 258,
@@ -187,6 +189,7 @@ enum EncoderError {
     ENCODER_ERROR_ABS_SPI_COM_FAIL           = 0x00000080,
     ENCODER_ERROR_ABS_SPI_NOT_READY          = 0x00000100,
     ENCODER_ERROR_HALL_NOT_CALIBRATED_YET    = 0x00000200,
+    ENCODER_ERROR_HYBRID_INCREMENTAL_HALL_VELOCITY_DISAGREEMENT = 0x00004000,
 };
 
 // ODrive.SensorlessEstimator.Error

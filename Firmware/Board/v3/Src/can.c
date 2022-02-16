@@ -69,7 +69,7 @@ CAN_HandleTypeDef hcan1 = {
     .AutoWakeUp = ENABLE,
     .AutoRetransmission = ENABLE,
     .ReceiveFifoLocked = DISABLE,
-    .TransmitFifoPriority = DISABLE,
+    .TransmitFifoPriority = ENABLE, // enable FIFO priority locally instead of CAN/command priority.
   }
 };
 
