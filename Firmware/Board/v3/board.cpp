@@ -97,17 +97,17 @@ Encoder encoders[AXIS_COUNT] = {
     {
         &htim3, // timer
         {M0_ENC_Z_GPIO_Port, M0_ENC_Z_Pin}, // index_gpio
-        {M0_ENC_A_GPIO_Port, M0_ENC_A_Pin}, // hallA_gpio
-        {M0_ENC_B_GPIO_Port, M0_ENC_B_Pin}, // hallB_gpio
-        {M0_ENC_Z_GPIO_Port, M0_ENC_Z_Pin}, // hallC_gpio
+        {GPIO_6_GPIO_Port, GPIO_6_Pin}, // hallA_gpio
+        {GPIO_8_GPIO_Port, GPIO_8_Pin}, // hallB_gpio
+        {GPIO_7_GPIO_Port, GPIO_7_Pin}, // hallC_gpio
         &spi3_arbiter // spi_arbiter
     },
     {
         &htim4, // timer
         {M1_ENC_Z_GPIO_Port, M1_ENC_Z_Pin}, // index_gpio
-        {M1_ENC_A_GPIO_Port, M1_ENC_A_Pin}, // hallA_gpio
-        {M1_ENC_B_GPIO_Port, M1_ENC_B_Pin}, // hallB_gpio
-        {M1_ENC_Z_GPIO_Port, M1_ENC_Z_Pin}, // hallC_gpio
+        {GPIO_3_GPIO_Port, GPIO_3_Pin}, // hallA_gpio
+        {GPIO_5_GPIO_Port, GPIO_5_Pin}, // hallB_gpio
+        {GPIO_4_GPIO_Port, GPIO_4_Pin}, // hallC_gpio
         &spi3_arbiter // spi_arbiter
     }
 };

@@ -21,7 +21,16 @@ public:
         float calib_range = 0.02f; // Accuracy required to pass encoder cpr check
         float calib_scan_distance = 16.0f * M_PI; // rad electrical
         float calib_scan_omega = 4.0f * M_PI; // rad/s electrical
-        float bandwidth = 1000.0f;
+        float bandwidth = 1000.0f; // influences filter gain for estimating position and velocity.
+        // influences filter gain for estimating velocity from hall sensors in hybrid mode.
+        float hybrid_incremental_hall_vel_bandwidth = 100.0f;
+        // influences filter gain for estimating velocity divergence between hall sensors and encoders.
+        // Want this to be slower than vel estaimation filters.
+        float hybrid_incremental_hall_vel_divergence_bandwidth = 10.0f;
+        // max error between encoder and hall vel estimates before an error is thrown (in turns per second)
+        float hybrid_incremental_hall_max_vel_divergence = 1.0f;
+        // phase error beyond the normal [-M_PI/6, M_PI/6] range that requires correction
+        float hybrid_incremental_hall_max_phase_error = 0.1f;
         int32_t phase_offset = 0;        // Offset between encoder count and rotor electrical phase
         float phase_offset_float = 0.0f; // Sub-count phase alignment offset
         int32_t cpr = (2048 * 4);   // Default resolution of CUI-AMT102 encoder,
@@ -144,6 +153,17 @@ public:
     uint16_t abs_spi_dma_tx_[1] = {0xFFFF};
     uint16_t abs_spi_dma_rx_[1];
     Stm32SpiArbiter::SpiTask spi_task_;
+
+    int32_t hybrid_hall_count_in_cpr_ = 0;
+    float hybrid_hall_pos_cpr_counts_ = 0.0f; // hall [counts]
+    float hybrid_hall_vel_estimate_counts_ = 0.0f; // hall [counts/s]
+    //float hybrid_hall_pos_estimate_ = 0.0f; // [turns]
+    float hybrid_hall_vel_estimate_ = 0.0f; // [turns/s]
+    float hybrid_hall_vel_divergence_ = 0.0f; // [turns/s]
+    float hybrid_hall_phase_ = 0.0f;
+    float hybrid_phase_error_ = 0.0f;
+    float hybrid_phase_correction_ = 0.0f;
+    int32_t hybrid_encoder_count_correction_ = 0;
 
     constexpr float getCoggingRatio(){
         return 1.0f / 3600.0f;
